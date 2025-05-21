@@ -155,6 +155,25 @@ def identify_bots(path: str, min_ips: int):
         print(f"{fp:<47} {len(ips):>6}")
 
 # ── CLI ─────────────────────────────────────────────────────────────────────
+import re
+
+def extract_wget_links(logfile):
+    """
+    Extra Credit: Extract unique URLs used in wget or curl commands.
+    """
+    import re
+    urls = set()
+
+    with open(logfile, "r", encoding="utf-8") as f:
+        for line in f:
+            if "wget" in line or "curl" in line:
+                # Use regex to find all http/https URLs
+                found = re.findall(r"https?://[^\s]+", line)
+                urls.update(found)
+
+    print("Downloaded URLs:")
+    for url in sorted(urls):
+        print(url)
 
 def main():
     parser = argparse.ArgumentParser(description="Cowrie log analyzer — student template")
@@ -162,7 +181,7 @@ def main():
     parser.add_argument("--task",
                         required=True,
                         choices=["failed-logins", "connections",
-                                 "successful-creds", "identify-bots"],
+                                 "successful-creds", "identify-bots", "wget-drops"],
                         help="Which analysis to run")
     parser.add_argument("--min-count", type=int, default=1,
                         help="Min events to report (failed-logins)")
@@ -176,6 +195,8 @@ def main():
         connections(args.logfile)
     elif args.task == "successful-creds":
         analyze_successful_creds(args.logfile)
+    elif args.task == "wget-drops":
+        extract_wget_links(args.logfile)
     elif args.task == "identify-bots":
         identify_bots(args.logfile, args.min_ips)
 
