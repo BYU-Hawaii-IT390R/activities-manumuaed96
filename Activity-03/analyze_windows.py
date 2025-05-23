@@ -188,6 +188,7 @@ def win_services(watch: list[str], auto_fix: bool):
 # ══════════════════════════════════════════════════════════════════════════
 # CLI
 # ══════════════════════════════════════════════════════════════════════════
+# Parses scheduled tasks using schtasks
 def win_tasks():
     import subprocess, csv
     try:
@@ -204,6 +205,7 @@ def win_tasks():
     except Exception as e:
         print(f"[Unexpected Error] {e}")
 
+# Lists startup items from the registry
 def win_startup():
     import winreg
     def read_key(root, path):
@@ -222,41 +224,76 @@ def win_startup():
     print("\n[Local Machine]")
     read_key(winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run")
 
+    # Checks Shadow Copy (VSS) storage usage
+    def win_vss():
+        import subprocess, re
+    try:
+        result = subprocess.run(["vssadmin", "list", "shadowstorage"], capture_output=True, text=True, check=True)
+        matches = re.findall(r"Used Shadow Copy Storage space: (.+)\n.+Maximum Shadow Copy Storage space: (.+)", result.stdout)
+        if not matches:
+            print(" No VSS storage found.")
+            return
+        print("\n Shadow Copy Storage Usage")
+        for used, max_space in matches:
+            print(f"Used: {used.strip()} / Max: {max_space.strip()}")
+    except Exception as e:
+        print(f"[Error] Failed to check shadow storage: {e}")
 
-def main():
-    p = argparse.ArgumentParser(description="Windows admin toolkit (IT 390R)")
-    p.add_argument("--task", required=True,
-                   choices=["win-events", "win-pkgs", "win-services", "win-tasks", "win-startup"],
+    # Lists processes over 100MB memory usage
+    def win_procs():
+     import subprocess, csv
+    try:
+        result = subprocess.run(["tasklist", "/fo", "csv", "/nh"], capture_output=True, text=True, check=True)
+        reader = csv.reader(result.stdout.splitlines())
+        print("\n Processes Using More Than 100 MB of RAM")
+        print(f"{'Process Name':30} {'PID':>6} {'Memory Usage':>15}")
+        print("-" * 55)
+        for row in reader:
+            name, pid, sess_name, sess_id, mem = row
+            mem_val = int(mem.replace(",", "").replace(" K", ""))
+            if mem_val > 100000:  # over 100 MB
+                print(f"{name:30} {pid:>6} {mem:>15}")
+    except Exception as e:
+        print(f"[Error] Could not list processes: {e}")
+
+    def main():
+        p = argparse.ArgumentParser(description="Windows admin toolkit (IT 390R)")
+        p.add_argument("--task", required=True,
+                   choices=["win-vss", "win-procs", "win-events", "win-pkgs", "win-services", "win-tasks", "win-startup"],
                    help="Which analysis to run")
 
     # win-events options
-    p.add_argument("--hours", type=int, default=24,
+        p.add_argument("--hours", type=int, default=24,
                    help="Look‑back window for Security log (win-events)")
-    p.add_argument("--min-count", type=int, default=1,
+        p.add_argument("--min-count", type=int, default=1,
                    help="Min occurrences before reporting (win-events)")
 
     # win-pkgs options
-    p.add_argument("--csv", metavar="FILE", default=None,
+        p.add_argument("--csv", metavar="FILE", default=None,
                    help="Export installed-software list to CSV (win-pkgs)")
 
     # win-services options
-    p.add_argument("--watch", nargs="*", metavar="SVC", default=[],
+        p.add_argument("--watch", nargs="*", metavar="SVC", default=[],
                    help="Service names to check (win-services)")
-    p.add_argument("--fix", action="store_true",
+        p.add_argument("--fix", action="store_true",
                    help="Attempt to start stopped services (win-services)")
 
-    args = p.parse_args()
+        args = p.parse_args()
 
-    if args.task == "win-events":
-        win_events(args.hours, args.min_count)
-    elif args.task == "win-pkgs":
-        win_pkgs(args.csv)
-    elif args.task == "win-services":
-        win_services(args.watch, args.fix)
-    elif args.task == "win-tasks":
-        win_tasks()
-    elif args.task == "win-startup":
-        win_startup()
+        if args.task == "win-events":
+            win_events(args.hours, args.min_count)
+        elif args.task == "win-pkgs":
+            win_pkgs(args.csv)
+        elif args.task == "win-services":
+            win_services(args.watch, args.fix)
+        elif args.task == "win-tasks":
+            win_tasks()
+        elif args.task == "win-startup":
+            win_startup()
+        elif args.task == "win-vss":
+            win_vss()
+        elif args.task == "win-procs":
+            win_procs()
 
-if __name__ == "__main__":
-    main()
+    if __name__ == "__main__":
+        main()
